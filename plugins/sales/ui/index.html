@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sales Workspace</title>
+<style>
+/* Read-only view of data/gtm.db. Served on 127.0.0.1 by `gtm.py ui`. No external requests. */
+:root {
+  color-scheme: dark;
+  --z950:#09090b; --z900:#18181b; --z800:#27272a; --z700:#3f3f46; --z600:#52525b;
+  --z500:#71717a; --z400:#a1a1aa; --z300:#d4d4d8; --z200:#e4e4e7; --z100:#f4f4f5;
+  --indigo:#6366f1; --indigo3:#a5b4fc; --sky4:#38bdf8;
+}
+* { box-sizing:border-box; scrollbar-width:thin; scrollbar-color:var(--z700) transparent; }
+html, body { margin:0; height:100%; }
+body { background:var(--z950); color:var(--z200); font:14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased; }
+a { color:var(--sky4); text-decoration:none; } a:hover { text-decoration:underline; }
+button { font:inherit; color:inherit; background:none; border:0; cursor:pointer; padding:0; }
+
+/* header */
+header { position:sticky; top:0; z-index:30; border-bottom:1px solid var(--z800); background:rgba(9,9,11,.9); backdrop-filter:blur(8px); }
+.bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px 24px; padding:12px 20px; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:600; color:var(--z100); }
+.brand .mark { display:grid; place-items:center; width:28px; height:28px; border-radius:6px; background:var(--indigo); color:#fff; font-weight:700; }
+.brand .ws { font-weight:400; color:var(--z500); margin-left:4px; }
+nav.tabs { display:flex; gap:4px; padding:4px; border:1px solid var(--z800); background:var(--z900); border-radius:8px; }
+nav.tabs button { padding:6px 12px; border-radius:6px; font-weight:500; color:var(--z400); }
+nav.tabs button:hover { color:var(--z100); }
+nav.tabs button.on { background:var(--indigo); color:#fff; }
+nav.tabs .n { margin-left:6px; font-size:11px; opacity:.7; }
+.live { margin-left:auto; display:flex; align-items:center; gap:16px; }
+.live .state { text-align:right; font-size:12px; }
+.live .dot { display:inline-block; width:6px; height:6px; border-radius:99px; margin-right:6px; vertical-align:middle; }
+.live .ok { color:#6ee7b7; } .live .ok .dot { background:#34d399; }
+.live .off { color:#fcd34d; } .live .off .dot { background:#fbbf24; }
+.live .when { font-size:11px; color:var(--z500); }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border:1px solid var(--z700); background:var(--z900); border-radius:8px; color:var(--z200); }
+.btn:hover { background:var(--z800); }
+
+main { padding:16px 20px 48px; }
+.stats { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px, 1fr)); gap:8px; margin-bottom:16px; }
+.stat { border:1px solid var(--z800); background:rgba(24,24,27,.5); border-radius:8px; padding:8px 12px; }
+.stat .v { font-size:18px; font-weight:600; color:var(--z100); font-variant-numeric:tabular-nums; }
+.stat .l { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--z500); }
+
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:12px; }
+.search { position:relative; }
+.search svg { position:absolute; left:10px; top:10px; width:16px; height:16px; color:var(--z500); pointer-events:none; }
+.search input { width:260px; max-width:100%; border:1px solid var(--z800); background:var(--z900); border-radius:8px; padding:8px 12px 8px 32px; color:var(--z100); outline:none; font:inherit; }
+.search input:focus, select:focus { border-color:rgba(99,102,241,.6); box-shadow:0 0 0 1px rgba(99,102,241,.4); }
+label.sel { display:flex; align-items:center; gap:8px; color:var(--z500); font-size:13px; }
+select { border:1px solid var(--z800); background:var(--z900); border-radius:8px; padding:7px 10px; color:var(--z100); font:inherit; outline:none; }
+label.check { display:flex; align-items:center; gap:6px; color:var(--z400); font-size:13px; cursor:pointer; }
+.count { margin-left:auto; color:var(--z500); font-size:12px; }
+
+/* tables */
+.tablewrap { border:1px solid var(--z800); border-radius:10px; overflow-x:auto; }
+table { width:100%; border-collapse:collapse; min-width:760px; }
+th { position:sticky; top:0; z-index:5; background:var(--z900); text-align:left; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--z500); padding:8px 12px; border-bottom:1px solid var(--z800); }
+td { padding:8px 12px; vertical-align:top; border-top:1px solid rgba(39,39,42,.7); }
+tr.row { cursor:pointer; } tr.row:hover td { background:rgba(24,24,27,.4); }
+tr.grp td { background:rgba(24,24,27,.8); padding:8px 12px; cursor:pointer; user-select:none; }
+tr.grp:hover td { background:rgba(39,39,42,.8); }
+tr.grp .lbl { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--indigo3); }
+tr.grp .cnt { font-size:12px; color:var(--z500); margin-left:8px; }
+tr.grp .tri { display:inline-block; width:10px; color:var(--z500); transition:transform .15s; margin-right:6px; }
+tr.grp.open .tri { transform:rotate(90deg); }
+tr.detail td { background:rgba(24,24,27,.55); padding:12px 16px 14px 44px; }
+.name { font-weight:500; color:var(--z100); }
+.sub { font-size:11px; color:var(--z500); }
+.desc { font-size:11px; color:var(--z500); margin-top:2px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.co { display:flex; gap:8px; align-items:flex-start; }
+.logo { display:inline-grid; place-items:center; flex:none; width:18px; height:18px; border-radius:4px; font-size:10px; font-weight:600; margin-top:1px; }
+.links a { margin-right:8px; font-size:11px; }
+.muted { color:var(--z600); font-size:11px; }
+.num { font-variant-numeric:tabular-nums; }
+
+/* chips (same tones as the Vercel dashboard) */
+.chip { display:inline-flex; align-items:center; border-radius:6px; padding:1px 6px; font-size:11px; font-weight:500; white-space:nowrap; box-shadow:inset 0 0 0 1px var(--r); background:var(--b); color:var(--c); margin:0 4px 2px 0; }
+.t-zinc   { --b:var(--z800); --c:var(--z300); --r:var(--z700); }
+.t-indigo { --b:rgba(99,102,241,.15); --c:#a5b4fc; --r:rgba(99,102,241,.3); }
+.t-emerald{ --b:rgba(16,185,129,.15); --c:#6ee7b7; --r:rgba(16,185,129,.3); }
+.t-amber  { --b:rgba(245,158,11,.15); --c:#fcd34d; --r:rgba(245,158,11,.3); }
+.t-rose   { --b:rgba(244,63,94,.15);  --c:#fda4af; --r:rgba(244,63,94,.3); }
+.t-sky    { --b:rgba(14,165,233,.15); --c:#7dd3fc; --r:rgba(14,165,233,.3); }
+.t-violet { --b:rgba(139,92,246,.15); --c:#c4b5fd; --r:rgba(139,92,246,.3); }
+.ch { display:inline-flex; gap:4px; align-items:center; vertical-align:middle; }
+.ch a, .ch span { display:inline-flex; } .ch a:hover { transform:scale(1.1); text-decoration:none; }
+
+/* detail panel */
+.dgrid { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px; }
+.dgrid h4 { margin:0 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--z500); font-weight:600; }
+.dgrid p { margin:0 0 6px; font-size:13px; color:var(--z300); white-space:pre-wrap; }
+.dgrid ul { margin:0; padding-left:16px; font-size:13px; color:var(--z300); }
+.dgrid li { margin-bottom:3px; }
+.draft { border:1px solid var(--z800); border-radius:8px; padding:8px 10px; margin-bottom:6px; font-size:13px; color:var(--z200); white-space:pre-wrap; }
+
+/* today */
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:12px; }
+.card { border:1px solid var(--z800); background:rgba(24,24,27,.5); border-radius:10px; padding:12px 14px; }
+.card h3 { margin:0 0 8px; font-size:13px; font-weight:600; color:var(--z100); display:flex; gap:8px; align-items:center; }
+.card ul { margin:0; padding-left:16px; font-size:13px; color:var(--z300); }
+.card li { margin-bottom:3px; }
+.card.zero { opacity:.55; }
+
+.empty { border:1px dashed var(--z700); border-radius:10px; padding:40px 20px; text-align:center; color:var(--z400); }
+.empty b { color:var(--z100); }
+
+/* a row that just arrived flashes once, so you see the database fill up */
+@keyframes flash { from { background:rgba(99,102,241,.28); } to { background:transparent; } }
+tr.fresh td, li.fresh { animation:flash 3s ease-out; }
+
+@media (max-width:640px) {
+  .bar, main { padding-left:16px; padding-right:16px; }
+  .live .state { display:none; }
+  .search input { width:100%; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><span class="mark">S</span><span>Sales<span class="ws" id="ws"></span></span></div>
+    <nav class="tabs" id="tabs"></nav>
+    <div class="live">
+      <div class="state"><div id="live" class="off"><span class="dot"></span>Connecting…</div><div class="when" id="when"></div></div>
+      <button class="btn" id="refresh" title="Refresh now">
+        <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a7 7 0 00-6.32 4H6a1 1 0 010 2H2a1 1 0 01-1-1V4a1 1 0 112 0v1.1A9 9 0 1110 19a1 1 0 110-2 7 7 0 100-14z" clip-rule="evenodd"/></svg>Refresh</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar" id="toolbar"></div>
+  <div id="content"></div>
+</main>
+
+<script>
+"use strict";
+const POLL_MS = 4000;
+const TABS = [
+  { id: "today", label: "Today" },
+  { id: "accounts", label: "Accounts" },
+  { id: "contacts", label: "Contacts" },
+  { id: "signals", label: "Signals" },
+];
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("gtm-ui:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("gtm-ui:" + k, JSON.stringify(v)); } catch {} },
+};
+const S = {
+  data: null, lastText: "", tab: store.get("tab", "accounts"), q: "",
+  group: store.get("group", { accounts: "fit", contacts: "stage" }),
+  activeOnly: true, open: new Set(), closed: new Set(),
+  seen: null, fresh: new Map(),
+};
+
+// ------------------------------------------------------------------ helpers
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const safeUrl = (u) => (/^https?:\/\//i.test(u || "") ? u : null);
+const siteUrl = (d) => (d ? "https://" + String(d).replace(/^https?:\/\//, "").replace(/\/+$/, "") : null);
+const fullName = (c) => [c.first_name, c.last_name].filter(Boolean).join(" ") || "(no name)";
+const day = (t) => (t ? String(t).slice(0, 10) : "");
+const daysAgo = (t) => { const d = Date.parse(t); return isNaN(d) ? null : Math.floor((Date.now() - d) / 864e5); };
+const chip = (text, tone = "zinc", title = "") => `<span class="chip t-${tone}"${title ? ` title="${esc(title)}"` : ""}>${esc(text)}</span>`;
+const link = (href, text) => { const u = safeUrl(href); return u ? `<a href="${esc(u)}" target="_blank" rel="noreferrer">${esc(text)}</a>` : ""; };
+const HUES = [["rgba(99,102,241,.2)", "#a5b4fc"], ["rgba(16,185,129,.2)", "#6ee7b7"], ["rgba(14,165,233,.2)", "#7dd3fc"],
+              ["rgba(245,158,11,.2)", "#fcd34d"], ["rgba(244,63,94,.2)", "#fda4af"], ["rgba(139,92,246,.2)", "#c4b5fd"]];
+function logo(name, domain) {
+  const s = (name || domain || "?").trim() || "?";
+  const [bg, fg] = HUES[s.charCodeAt(0) % HUES.length];
+  return `<span class="logo" style="background:${bg};color:${fg}">${esc(s.charAt(0).toUpperCase())}</span>`;
+}
+const TONES = ["indigo", "sky", "violet", "amber", "emerald"];
+const toneFor = (s) => TONES[[...String(s)].reduce((a, c) => a + c.charCodeAt(0), 0) % TONES.length];
+
+// contact channel icons: grey when missing, brand colour when present
+const CH_OFF = "#52525b";
+const GLYPH = {
+  linkedin: (c) => `<svg width="13" height="13" viewBox="0 0 24 24"><rect x="1" y="1" width="22" height="22" rx="4" fill="${c}"/><rect x="5.2" y="9.4" width="3" height="9.2" fill="#fff"/><circle cx="6.7" cy="6.4" r="1.75" fill="#fff"/><path d="M10.6 9.4h2.9v1.3c.5-.9 1.6-1.5 3-1.5 2.6 0 3.3 1.7 3.3 4v5.4h-3v-4.8c0-1.1-.2-2-1.4-2s-1.8.9-1.8 2v4.8h-3z" fill="#fff"/></svg>`,
+  mail: (c) => `<svg width="13" height="13" viewBox="0 0 24 24"><rect x="2" y="4.5" width="20" height="15" rx="2.2" fill="none" stroke="${c}" stroke-width="2"/><path d="M3 6l9 7 9-7" fill="none" stroke="${c}" stroke-width="2.2" stroke-linejoin="round"/></svg>`,
+  phone: (c) => `<svg width="13" height="13" viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11.4 11.4 0 003.6.57 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.25.2 2.45.57 3.57a1 1 0 01-.25 1z" fill="${c}"/></svg>`,
+};
+const CH_ON = { linkedin: "#0A66C2", mail: "#EA4335", phone: "#22C55E" };
+function channel(kind, value) {
+  const label = { linkedin: "LinkedIn", mail: "Email", phone: "Phone" }[kind];
+  if (!value) return `<span title="No ${label.toLowerCase()}">${GLYPH[kind](CH_OFF)}</span>`;
+  const href = kind === "linkedin" ? safeUrl(value) : kind === "mail" ? "mailto:" + value : "tel:" + String(value).replace(/\s/g, "");
+  if (!href) return `<span title="${esc(label + ": " + value)}">${GLYPH[kind](CH_ON[kind])}</span>`;
+  return `<a href="${esc(href)}"${kind === "linkedin" ? ' target="_blank" rel="noreferrer"' : ""} title="${esc(label + ": " + value)}">${GLYPH[kind](CH_ON[kind])}</a>`;
+}
+const channels = (c) => `<span class="ch">${channel("linkedin", c.linkedin_url)}${channel("mail", c.email)}${channel("phone", c.phone)}</span>`;
+// one icon set per account: lit when at least one person has that channel
+function peopleCell(people) {
+  const n = (f) => people.filter((c) => c[f]).length;
+  const icon = (kind, f, label) => `<span title="${n(f)} of ${people.length} with ${label}">${GLYPH[kind](n(f) ? CH_ON[kind] : CH_OFF)}</span>`;
+  return `<span class="num" style="margin-right:6px">${people.length}</span><span class="ch">${icon("linkedin", "linkedin_url", "LinkedIn")}${icon("mail", "email", "email")}${icon("phone", "phone", "phone")}</span>`;
+}
+
+const FIT = { yes: ["Fit", "emerald"], unknown: ["Unknown", "zinc"], no: ["Not fit", "rose"] };
+function fitChip(a) {
+  if (a.status === "disqualified") return chip("Disqualified", "rose", a.fit_reason);
+  const [t, tone] = FIT[a.fit] || FIT.unknown;
+  return chip(t, tone, a.fit_reason);
+}
+
+// the furthest a person has come, from their touches
+const STAGES = [
+  { id: "new", label: "Not contacted", tone: "zinc" },
+  { id: "invited", label: "Invited", tone: "amber" },
+  { id: "emailed", label: "Emailed", tone: "amber" },
+  { id: "accepted", label: "Accepted", tone: "sky" },
+  { id: "messaged", label: "DM sent", tone: "indigo" },
+  { id: "replied", label: "Replied", tone: "emerald" },
+  { id: "meeting", label: "Meeting", tone: "emerald" },
+];
+const KIND_STAGE = { invite: "invited", email: "emailed", accepted: "accepted", message: "messaged", reply: "replied", meeting: "meeting" };
+const RANK = Object.fromEntries(STAGES.map((s, i) => [s.id, i]));
+function stageOf(c) {
+  let best = "new";
+  for (const t of c._touches) { const s = KIND_STAGE[t.kind]; if (s && RANK[s] > RANK[best]) best = s; }
+  return STAGES[RANK[best]];
+}
+
+// ------------------------------------------------------------------ data
+function index(d) {
+  const byAcc = new Map(d.accounts.map((a) => [a.id, a]));
+  for (const a of d.accounts) { a._contacts = []; a._signals = []; }
+  for (const c of d.contacts) { c._touches = []; c._drafts = []; c._acc = byAcc.get(c.account_id) || null; if (c._acc) c._acc._contacts.push(c); }
+  const byCon = new Map(d.contacts.map((c) => [c.id, c]));
+  for (const t of d.touches) byCon.get(t.contact_id)?._touches.push(t);
+  for (const x of d.drafts) byCon.get(x.contact_id)?._drafts.push(x);
+  for (const s of d.signals) { s._acc = byAcc.get(s.account_id) || null; if (s._acc) s._acc._signals.push(s); }
+  return d;
+}
+
+function markFresh(d) {
+  const ids = { a: d.accounts.map((x) => x.id), c: d.contacts.map((x) => x.id), s: d.signals.map((x) => x.id) };
+  if (S.seen) {
+    const t = Date.now();
+    for (const k of Object.keys(ids)) for (const id of ids[k]) if (!S.seen[k].has(id)) S.fresh.set(k + id, t);
+  }
+  S.seen = { a: new Set(ids.a), c: new Set(ids.c), s: new Set(ids.s) };
+  for (const [k, t] of S.fresh) if (Date.now() - t > 6000) S.fresh.delete(k);
+}
+const fresh = (k, id) => (S.fresh.has(k + id) ? " fresh" : "");
+
+async function load(force) {
+  try {
+    const r = await fetch("/api/data", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const text = await r.text();
+    setLive(true);
+    if (text === S.lastText && !force) return;
+    S.lastText = text;
+    const d = index(JSON.parse(text));
+    markFresh(d);
+    S.data = d;
+    document.getElementById("ws").textContent = d.workspace ? " · " + d.workspace : "";
+    renderTabs(); renderStats(); renderContent();
+  } catch (e) {
+    setLive(false);
+  }
+}
+function setLive(ok) {
+  const el = document.getElementById("live");
+  el.className = ok ? "ok" : "off";
+  el.innerHTML = `<span class="dot"></span>${ok ? "Live · local database" : "Not connected: is gtm.py ui running?"}`;
+  if (ok) document.getElementById("when").textContent = "as of " + new Date().toLocaleTimeString();
+}
+
+// ------------------------------------------------------------------ layout
+function renderTabs() {
+  const d = S.data;
+  const n = d ? { accounts: d.accounts.length, contacts: d.contacts.length, signals: d.signals.filter((s) => s.active).length,
+                  today: d.pipeline.reduce((a, p) => a + (p.key === "old_signals" ? 0 : p.rows.length), 0) } : {};
+  document.getElementById("tabs").innerHTML = TABS.map((t) =>
+    `<button data-tab="${t.id}" class="${S.tab === t.id ? "on" : ""}">${t.label}${n[t.id] != null ? `<span class="n">${n[t.id]}</span>` : ""}</button>`).join("");
+}
+
+function renderStats() {
+  const d = S.data;
+  const week = d.touches.filter((t) => (daysAgo(t.at) ?? 99) <= 7);
+  const stat = (v, l) => `<div class="stat"><div class="v">${v}</div><div class="l">${l}</div></div>`;
+  document.getElementById("stats").innerHTML = [
+    stat(d.accounts.length, "Accounts"),
+    stat(d.accounts.filter((a) => a.fit === "yes" && a.status !== "disqualified").length, "Fit accounts"),
+    stat(d.contacts.length, "People"),
+    stat(d.contacts.filter((c) => c.email).length, "With email"),
+    stat(d.contacts.filter((c) => c.phone).length, "With phone"),
+    stat(d.signals.filter((s) => s.active).length, "Active signals"),
+    stat(d.drafts.length, "Drafts ready"),
+    stat(week.length, "Touches, 7 days"),
+  ].join("");
+}
+
+const SEARCH_SVG = `<svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a1 1 0 01-1.42 1.42l-3.08-3.08A7 7 0 012 9z" clip-rule="evenodd"/></svg>`;
+const GROUPS = {
+  accounts: [["fit", "Fit"], ["segment", "Segment"], ["source", "Source"], ["none", "Nothing"]],
+  contacts: [["stage", "Stage"], ["company", "Company"], ["persona", "Persona"], ["none", "Nothing"]],
+};
+function renderToolbar() {
+  const t = S.tab;
+  let html = "";
+  if (t !== "today") html += `<div class="search">${SEARCH_SVG}<input id="q" placeholder="Search ${t}…" value="${esc(S.q)}"></div>`;
+  if (GROUPS[t]) html += `<label class="sel">Group by <select id="group">${GROUPS[t].map(([v, l]) =>
+      `<option value="${v}"${S.group[t] === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>`;
+  if (t === "signals") html += `<label class="check"><input type="checkbox" id="active"${S.activeOnly ? " checked" : ""}> Active only</label>`;
+  html += `<span class="count" id="count"></span>`;
+  document.getElementById("toolbar").innerHTML = html;
+}
+
+function renderContent() {
+  const el = document.getElementById("content");
+  if (!S.data) return;
+  if (!S.data.accounts.length && !S.data.contacts.length) {
+    el.innerHTML = `<div class="empty"><b>The database is empty.</b><br>Ask Claude to <b>start</b>. New accounts, people and signals show up here by themselves.</div>`;
+    document.getElementById("count").textContent = "";
+    return;
+  }
+  const r = { today: viewToday, accounts: viewAccounts, contacts: viewContacts, signals: viewSignals }[S.tab]();
+  el.innerHTML = r.html;
+  const cnt = document.getElementById("count");
+  if (cnt) cnt.textContent = r.count ?? "";
+}
+
+const match = (q, ...vals) => !q || vals.some((v) => String(v ?? "").toLowerCase().includes(q));
+
+function grouped(rows, keyFn, order, renderRow, cols, tab) {
+  const groups = new Map();
+  for (const r of rows) { const k = keyFn(r) || "—"; (groups.get(k) || groups.set(k, []).get(k)).push(r); }
+  let keys = [...groups.keys()];
+  keys.sort(order ? (a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99) : (a, b) => groups.get(b).length - groups.get(a).length);
+  if (keys.length === 1 && keys[0] === "*") return groups.get("*").map(renderRow).join("");
+  return keys.map((k) => {
+    const id = tab + ":" + k, open = !S.closed.has(id);
+    return `<tr class="grp${open ? " open" : ""}" data-grp="${esc(id)}"><td colspan="${cols}"><span class="tri">▶</span><span class="lbl">${esc(k)}</span><span class="cnt">${groups.get(k).length}</span></td></tr>` +
+      (open ? groups.get(k).map(renderRow).join("") : "");
+  }).join("");
+}
+
+// ------------------------------------------------------------------ views
+function viewAccounts() {
+  const q = S.q.trim().toLowerCase();
+  const rows = S.data.accounts.filter((a) => match(q, a.name, a.domain, a.industry, a.segment, a.description, a.country, a.source));
+  const g = S.group.accounts;
+  const key = { fit: (a) => (a.status === "disqualified" ? "Disqualified" : FIT[a.fit]?.[0] || "Unknown"),
+                segment: (a) => a.segment, source: (a) => a.source, none: () => "*" }[g];
+  const order = g === "fit" ? ["Fit", "Unknown", "Not fit", "Disqualified"] : null;
+  const COLS = 7;
+  const row = (a) => {
+    const open = S.open.has("a" + a.id);
+    const people = a._contacts;
+    const sig = a._signals.filter((s) => s.active);
+    let h = `<tr class="row${fresh("a", a.id)}" data-open="a${a.id}">
+      <td><div class="co">${logo(a.name, a.domain)}<div style="min-width:0">
+        <div class="name">${esc(a.name)}</div>
+        <div class="links">${a.domain ? link(siteUrl(a.domain), a.domain) : ""}${a.linkedin_url ? link(a.linkedin_url, "in") : ""}</div>
+        ${a.description ? `<div class="desc">${esc(a.description)}</div>` : ""}</div></div></td>
+      <td>${fitChip(a)}</td>
+      <td>${sig.length ? sig.slice(0, 3).map((s) => chip(s.type, toneFor(s.type), s.detail)).join("") : '<span class="muted">—</span>'}</td>
+      <td>${people.length ? peopleCell(people) : '<span class="muted">none yet</span>'}</td>
+      <td>${a.segment ? chip(a.segment, "indigo") : '<span class="muted">—</span>'}</td>
+      <td class="sub">${[a.size_employees ? a.size_employees + " staff" : "", a.country].filter(Boolean).map(esc).join(" · ") || "—"}</td>
+      <td class="sub">${esc(day(a.updated_at || a.created_at))}</td></tr>`;
+    if (open) h += `<tr class="detail"><td colspan="${COLS}"><div class="dgrid">
+      <div><h4>Fit</h4><p>${fitChip(a)} ${esc(a.fit_reason || "No reason recorded yet.")}</p>
+        ${a.industry ? `<h4>Industry</h4><p>${esc(a.industry)}</p>` : ""}
+        ${a.notes ? `<h4>Notes</h4><p>${esc(a.notes)}</p>` : ""}
+        <p class="sub">Source: ${esc(a.source || "—")} · added ${esc(day(a.created_at))}</p></div>
+      <div><h4>Signals</h4>${a._signals.length ? `<ul>${a._signals.map((s) => `<li>${chip(s.type, toneFor(s.type))}${esc(s.detail || "")} ${s.source_url ? link(s.source_url, "ad ↗") : ""} <span class="sub">${esc(day(s.observed_at))}${s.active ? "" : " · closed"}</span></li>`).join("")}</ul>` : '<p class="muted">No signals.</p>'}</div>
+      <div><h4>People</h4>${people.length ? `<ul>${people.map((c) => `<li>${channels(c)} <b>${esc(fullName(c))}</b> <span class="sub">${esc(c.title || "")}</span> ${chip(stageOf(c).label, stageOf(c).tone)}</li>`).join("")}</ul>` : '<p class="muted">No people yet: find 1 or 2.</p>'}</div>
+    </div></td></tr>`;
+    return h;
+  };
+  const head = `<tr><th style="width:34%">Company</th><th>Fit</th><th>Signals</th><th>People</th><th>Segment</th><th>Size · country</th><th>Updated</th></tr>`;
+  return { count: `${rows.length} of ${S.data.accounts.length}`,
+           html: `<div class="tablewrap"><table><thead>${head}</thead><tbody>${grouped(rows, key, order, row, COLS, "accounts")}</tbody></table></div>` };
+}
+
+function viewContacts() {
+  const q = S.q.trim().toLowerCase();
+  const rows = S.data.contacts.filter((c) => match(q, fullName(c), c.title, c.persona, c._acc?.name, c.email, c.location));
+  const g = S.group.contacts;
+  const key = { stage: (c) => stageOf(c).label, company: (c) => c._acc?.name, persona: (c) => c.persona, none: () => "*" }[g];
+  const order = g === "stage" ? STAGES.map((s) => s.label).reverse() : null;
+  const COLS = 7;
+  const row = (c) => {
+    const open = S.open.has("c" + c.id), st = stageOf(c);
+    const last = c._touches[c._touches.length - 1];
+    let h = `<tr class="row${fresh("c", c.id)}" data-open="c${c.id}">
+      <td><div class="name">${esc(fullName(c))}</div><div class="sub">${esc(c.title || "")}</div></td>
+      <td><div class="co">${logo(c._acc?.name, c._acc?.domain)}<span>${esc(c._acc?.name || "—")}</span></div></td>
+      <td>${c.persona ? chip(c.persona, "violet") : '<span class="muted">—</span>'}</td>
+      <td>${channels(c)}</td>
+      <td>${chip(st.label, st.tone)}${c._drafts.length ? chip(c._drafts.length + " draft", "indigo") : ""}</td>
+      <td class="sub">${last ? esc(`${last.kind} · ${last.channel} · ${day(last.at)}`) : "—"}</td>
+      <td class="sub">${esc(c.connection_degree || "")}</td></tr>`;
+    if (open) h += `<tr class="detail"><td colspan="${COLS}"><div class="dgrid">
+      <div><h4>From the full profile</h4>${c.profile_facts ? `<p>${esc(c.profile_facts)}</p>` : '<p class="muted">No profile facts yet. Paste the full profile before any opener.</p>'}
+        ${c.location ? `<p class="sub">${esc(c.location)}</p>` : ""}</div>
+      <div><h4>Drafts ready</h4>${c._drafts.length ? c._drafts.map((x) => `<div class="draft">${chip(x.kind || x.channel || "draft", "indigo")}${x.subject ? `<b>${esc(x.subject)}</b>\n` : ""}${esc(x.body || "")}</div>`).join("") : '<p class="muted">No drafts.</p>'}</div>
+      <div><h4>Touches</h4>${c._touches.length ? `<ul>${c._touches.slice().reverse().map((t) => `<li>${esc(day(t.at))} · ${esc(t.channel)} · <b>${esc(t.kind)}</b>${t.outcome ? " · " + esc(t.outcome) : ""}</li>`).join("")}</ul>` : '<p class="muted">Not contacted yet.</p>'}
+        <p class="sub">Email ${esc(c.email_status || (c.email ? "found" : "missing"))}${c.email_source ? " · " + esc(c.email_source) : ""} · phone ${esc(c.phone ? c.phone_type || "found" : "missing")}</p></div>
+    </div></td></tr>`;
+    return h;
+  };
+  const head = `<tr><th style="width:24%">Person</th><th>Company</th><th>Persona</th><th>Channels</th><th>Stage</th><th>Last touch</th><th>Degree</th></tr>`;
+  return { count: `${rows.length} of ${S.data.contacts.length}`,
+           html: `<div class="tablewrap"><table><thead>${head}</thead><tbody>${grouped(rows, key, order, row, COLS, "contacts")}</tbody></table></div>` };
+}
+
+function viewSignals() {
+  const q = S.q.trim().toLowerCase();
+  const rows = S.data.signals.filter((s) => (!S.activeOnly || s.active) && match(q, s.type, s.detail, s._acc?.name));
+  const row = (s) => {
+    const age = daysAgo(s.observed_at);
+    return `<tr class="${fresh("s", s.id).trim()}">
+      <td>${chip(s.type, toneFor(s.type))}</td>
+      <td><div class="co">${logo(s._acc?.name, s._acc?.domain)}<div><div class="name">${esc(s._acc?.name || "—")}</div>${s._acc ? fitChip(s._acc) : ""}</div></div></td>
+      <td>${esc(s.detail || "")} ${s.source_url ? link(s.source_url, "↗") : ""}</td>
+      <td class="sub">${esc(day(s.observed_at))}${age != null ? `<div>${age} days ago</div>` : ""}</td>
+      <td>${s.active ? (age != null && age > 30 ? chip("Re-check", "amber") : chip("Active", "emerald")) : chip("Closed", "zinc")}</td></tr>`;
+  };
+  const head = `<tr><th>Type</th><th>Company</th><th style="width:40%">What we saw</th><th>Seen</th><th>Status</th></tr>`;
+  return { count: `${rows.length} signals`,
+           html: rows.length ? `<div class="tablewrap"><table><thead>${head}</thead><tbody>${rows.map(row).join("")}</tbody></table></div>` : `<div class="empty">No signals yet.</div>` };
+}
+
+function viewToday() {
+  const html = `<div class="cards">${S.data.pipeline.map((p) => `<div class="card${p.rows.length ? "" : " zero"}">
+      <h3>${esc(p.title)} ${chip(p.rows.length, p.rows.length ? (p.key === "replies" ? "emerald" : "indigo") : "zinc")}</h3>
+      ${p.rows.length ? `<ul>${p.rows.slice(0, 12).map((r) => `<li>${esc(r)}</li>`).join("")}${p.rows.length > 12 ? `<li class="sub">… and ${p.rows.length - 12} more</li>` : ""}</ul>` : '<div class="muted">Nothing here.</div>'}
+    </div>`).join("")}</div>`;
+  return { html, count: "" };
+}
+
+// ------------------------------------------------------------------ events
+document.addEventListener("click", (e) => {
+  if (e.target.closest("a")) return;
+  const tab = e.target.closest("[data-tab]");
+  if (tab) { S.tab = tab.dataset.tab; S.q = ""; store.set("tab", S.tab); history.replaceState(null, "", "#" + S.tab); renderTabs(); renderToolbar(); renderContent(); return; }
+  const grp = e.target.closest("[data-grp]");
+  if (grp) { const id = grp.dataset.grp; S.closed.has(id) ? S.closed.delete(id) : S.closed.add(id); renderContent(); return; }
+  const row = e.target.closest("[data-open]");
+  if (row) { const id = row.dataset.open; S.open.has(id) ? S.open.delete(id) : S.open.add(id); renderContent(); return; }
+  if (e.target.closest("#refresh")) load(true);
+});
+document.addEventListener("input", (e) => {
+  if (e.target.id === "q") { S.q = e.target.value; renderContent(); }
+});
+document.addEventListener("change", (e) => {
+  if (e.target.id === "group") { S.group[S.tab] = e.target.value; store.set("group", S.group); renderContent(); }
+  if (e.target.id === "active") { S.activeOnly = e.target.checked; renderContent(); }
+});
+
+const fromHash = location.hash.slice(1);
+if (TABS.some((t) => t.id === fromHash)) S.tab = fromHash;
+if (!TABS.some((t) => t.id === S.tab)) S.tab = "accounts";
+renderTabs(); renderToolbar();
+load(true);
+setInterval(() => { if (!document.hidden) load(false); }, POLL_MS);
+</script>
+</body>
+</html>

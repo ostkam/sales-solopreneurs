@@ -1,0 +1,8 @@
+{
+  "name": "sales",
+  "version": "0.1.0",
+  "description": "Build and run a local AI-native B2B sales system in Claude Code: playbooks + AI judgment + deterministic tools on a local SQLite database.",
+  "author": { "name": "Kamil Ostrowski" },
+  "license": "MIT",
+  "keywords": ["sales", "b2b", "outbound", "linkedin", "icp", "signals", "solopreneur"]
+}
