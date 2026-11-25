@@ -8,21 +8,41 @@ file on your machine.
 > A starter kit for your own agentic sales: a ready workspace with playbooks, a local
 > database and tools. You and Claude run it together and improve it every week.
 
-## Install (2 commands, in Claude Code)
+## Install
+
+You need [VS Code](https://code.visualstudio.com) with the
+[Claude Code extension](https://code.claude.com/docs/en/vs-code), and Python 3.9+
+(preinstalled on macOS and most Linux). No other packages.
+
+**1. Install the plugin (once).** In VS Code, open a terminal (**Terminal → New Terminal**)
+and run these 2 commands:
 
 ```
-/plugin marketplace add ostkam/sales-solopreneurs
-/plugin install sales@sales-solopreneurs
+claude plugin marketplace add ostkam/sales-solopreneurs
+claude plugin install sales@sales-solopreneurs
 ```
 
-Requirements: [Claude Code](https://code.claude.com) and Python 3.9+ (preinstalled on
-macOS and most Linux). No other packages. Some steps use tools you may already have
-(LinkedIn / Sales Navigator, an email data provider, an email sequencer), always through
-copy-paste or CSV, never scraping.
+The `/plugin` command does not work in the VS Code chat panel; these terminal commands do
+the same thing. *Using Claude Code in a terminal instead?* There you can also type
+`/plugin marketplace add ostkam/sales-solopreneurs` and `/plugin install sales@sales-solopreneurs`.
+
+**2. Open a new Claude chat.** A chat that was already open does not see the new plugin.
+Close the Claude panel and open it again (or run **Developer: Reload Window**).
+
+**Update to the latest version** later with:
+
+```
+claude plugin marketplace update sales-solopreneurs
+claude plugin update sales@sales-solopreneurs
+```
+
+Some steps use tools you may already have (LinkedIn / Sales Navigator, an email data
+provider, an email sequencer), always through copy-paste or CSV, never scraping.
 
 ## Start (10 minutes)
 
-Make an empty folder, open Claude Code in it, and type:
+1. Make an empty folder (for example `my-sales`) and open it in VS Code (**File → Open Folder**).
+2. Open the Claude panel and type:
 
 ```
 start
@@ -39,7 +59,11 @@ waits for your "go" between steps:
 6. writes your first LinkedIn connection note.
 
 After that, just say what you want ("find companies hiring bookkeepers that fit my ICP",
-"what should I do today?"); Claude picks the skill.
+"what should I do today?", "start the CRM"); Claude picks the skill.
+
+**If `start` is not recognised:** the plugin is not loaded in this chat. Check with
+`claude plugin list` in the terminal that `sales@sales-solopreneurs` is enabled, then open
+a new Claude chat.
 
 ## How it works
 
