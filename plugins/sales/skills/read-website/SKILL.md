@@ -31,7 +31,8 @@ A short table, each row with the page URL it came from:
 Say what was **not** found (e.g. "no prices", "no team page"), never guess it.
 
 ## What to do with it
-- **Your own site (onboarding):** go on with the `icp` skill; it uses `pages.json` to draft
+- **Your own site (onboarding):** save it once with `gtm.py set-company --domain <domain> --commit`
+  (name and logo then show in the Profile tab of the live view), then go on with the `icp` skill; it uses `pages.json` to draft
   the ICP, so only the gaps become questions.
 - **A prospect (account enrichment):** store a 1-2 sentence description and the company
   LinkedIn URL in a research line and apply it:

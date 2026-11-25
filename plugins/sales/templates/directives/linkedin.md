@@ -72,7 +72,7 @@ Send it 1 to 3 days after they accept.
 | Small offer | Something you make for them, quick to judge, with a clean exit | "I could record a 3 minute video … If not useful, just ignore this." |
 | Easy reply | A yes/no question | "Want it?" |
 
-No reply after 5 to 7 days: one short nudge, or switch to email. Never both channels on the same day.
+No reply after 5 to 7 days: one short nudge. After that, let it go.
 
 **Pacing:** 1 to 2 people per company at a time (different teams), stay well under
 LinkedIn's weekly invite limit, and withdraw invites still open after about 3 weeks.

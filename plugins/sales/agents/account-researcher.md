@@ -1,6 +1,6 @@
 ---
 name: account-researcher
-description: Researches a batch of companies (5-8) against the ICP fit rule using their own websites and public sources, and appends one JSON line per company to a given file. Used by the hiring-signal, research-accounts, new-leader-signal and event-list skills.
+description: Researches a batch of companies (5-8) against the ICP fit rule using their own websites and public sources, and appends one JSON line per company to a given file. Used by the start flow, the hiring-signal skill and the signal-builder test batches.
 tools: WebSearch, WebFetch, Read, Write, Edit, Bash
 model: sonnet
 ---

@@ -36,8 +36,8 @@ claude plugin marketplace update sales-solopreneurs
 claude plugin update sales@sales-solopreneurs
 ```
 
-Some steps use tools you may already have (LinkedIn / Sales Navigator, an email data
-provider, an email sequencer), always through copy-paste or CSV, never scraping.
+You also need LinkedIn (Sales Navigator helps, but is not required). Everything goes in by
+copy-paste, never scraping.
 
 ## Start (10 minutes)
 
@@ -91,26 +91,16 @@ needs your yes.
 
 ## The skills
 
-| Stage | Skill | What it does |
+| Step | Skill | What it does |
 |---|---|---|
-| Setup | `start` | The guide: runs the whole flow step by step, waits for your go |
-| | `init` | Builds the workspace: playbooks, database, `CLAUDE.md` |
-| | `read-website` | Reads a company site: what they sell, to whom, proof, regions, team, LinkedIn page, with the page for each fact |
+| Guide | `start` | Runs the whole flow below step by step and waits for your go |
+| Know your business | `read-website` | Reads a company site: what they sell, to whom, proof, regions, team, LinkedIn page, with the page for each fact |
 | | `icp` | 11 fixed parameters, filled from your website, then 5 numbered questions |
 | | `persona` | 8 parameters per buyer persona, same flow |
-| Signals | `signal-builder` | Define your own buying signals with AI: spec, test batch, yield, keep or stop |
-| | `hiring-signal` | The worked example: "they hire X → pain Y → my offer Z"; job ads in, qualified accounts out |
-| | `new-leader-signal` | People new in a relevant role (first 90 days) |
-| | `warm-network` | 1st/2nd-degree connections and mutual contacts first |
-| | `event-list` | Score an event's attendee or exhibitor list |
-| Accounts and leads | `research-accounts` | Parallel subagents check fit and enrich each account from its website |
-| | `import-leads` | LinkedIn / Sales Navigator paste or any CSV, matched and tagged by persona |
-| | `enrich` | Emails and phones from any provider's CSV export, fill-empty-only |
-| Outreach | `linkedin` | Connect note (no pitch), then a follow-up DM after they accept |
-| | `cold-email` | Seen → So → Small yes emails, validated, exported for your sequencer |
-| | `discovery-call` | Mom Test interview prep and debrief, fed back into the playbooks |
-| Run and improve | `pipeline` | What to do today, and the live local view of your database |
-| | `learn` | Turns results into concrete playbook changes |
+| Find who needs you now | `hiring-signal` | The worked example: "they hire X → pain Y → my offer Z"; job ads in, qualified accounts out |
+| | `signal-builder` | Define your own buying signals with AI: spec, test batch, yield, keep or stop |
+| Reach out | `linkedin` | People from a Sales Navigator paste, then a connect note (no pitch) and a follow-up DM after they accept |
+| Every day | `pipeline` | What to do today, and the live local CRM view |
 
 ## Your workspace
 
@@ -119,14 +109,26 @@ CLAUDE.md / AGENTS.md   how the workspace runs (Claude reads this every session)
 directives/             your playbooks (edit them freely)
 directives/signals/     one spec per buying signal you define
 data/gtm.db             your database (git-ignored)
-input/                  CSV exports and pastes you drop in
+input/                  pastes you drop in (job ads, people lists)
 .tmp/                   website reads, research lines, drafts (safe to delete)
 gtm.py                  shortcut: python3 gtm.py status | pipeline | ui | query "select ..."
 ```
 
-**See your data:** `python3 gtm.py ui` opens a live, read-only view in your browser
-(Today, Accounts, Contacts, Signals). It runs on `127.0.0.1` only and refreshes by itself
-while Claude works. Changes still go through Claude and the validator, never through the page.
+**See your data:** `python3 gtm.py ui` (or just ask Claude to "start the CRM") opens a
+live, read-only view in your browser:
+
+| Tab | What it shows |
+|---|---|
+| Profile | Your company (name and logo from your website), your ICP, fit rule, personas and background, each parameter marked confirmed / please check / missing |
+| Today | What to do now: replies, follow-ups, drafts ready, new signals |
+| Accounts | Companies grouped by fit, with signals and people |
+| Contacts | People by stage, from not contacted to meeting, with profile facts and drafts |
+| Signals | Every buying signal, with its date and source |
+
+It runs on your computer only (`localhost`), loads nothing from the internet, and refreshes
+by itself while Claude works. The Profile tab reads your playbooks directly, so edit
+`directives/icp.md` and the page follows. Changes to data still go through Claude and the
+validator, never through the page.
 
 ## Privacy
 
@@ -134,8 +136,7 @@ Everything runs locally. The plugin has no telemetry and sends nothing anywhere.
 runs on `127.0.0.1` and loads nothing from the internet. The only
 network calls are the website reader (it fetches the public pages you ask for) and the web
 research Claude does on companies. `data/`, `.tmp/` and `.env` are git-ignored by default.
-Respect LinkedIn's terms (paste, do not scrape) and your local rules for cold email and
-calls.
+Respect LinkedIn's terms: paste, do not scrape.
 
 ## Feedback
 

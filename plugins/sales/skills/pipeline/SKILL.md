@@ -8,8 +8,8 @@ allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py *) Read
 
 **Live view (dashboard):** when the user wants to *see* the data, run
 `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py ui` **in the background** (it keeps running
-and opens the browser; it moves to the next free port if 8765 is taken). It shows Today,
-Accounts, Contacts and Signals, refreshes every few seconds, and is read-only: every change
+and opens the browser; it moves to the next free port if 8765 is taken). It shows Profile
+(own company, ICP, personas), Today, Accounts, Contacts and Signals, refreshes every few seconds, and is read-only: every change
 still goes through `gtm.py` with a dry run. Tell the user the URL it printed. If it is
 already running, just give the URL again.
 
@@ -19,8 +19,8 @@ already running, just give the URL again.
    1. answer replies (always first);
    2. follow-up DMs for accepted invites (`linkedin` skill);
    3. send ready drafts;
-   4. find 1-2 people for new fit accounts (`import-leads`);
-   5. withdraw invites open > 3 weeks, or try email instead;
+   4. find 1-2 people for new fit accounts (`linkedin` skill);
+   5. withdraw invites open > 3 weeks;
    6. re-check old signals: still live? `gtm.py close-signal --id N --commit` if gone.
 3. Ask the user what was sent since last time and log it (`log-touch`), so tomorrow's view
    is right. Numbers worth tracking weekly: invites sent, accepted %, DMs sent, replies,

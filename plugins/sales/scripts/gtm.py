@@ -10,20 +10,18 @@ Run from the workspace folder (the one `init` created):
     python3 gtm.py init                          # build the workspace (safe to re-run)
     python3 gtm.py status                        # what is in the database
     python3 gtm.py profile-check icp|persona     # are the parameters filled?
-    python3 gtm.py import-accounts --file a.csv [--source S] [--commit]
     python3 gtm.py import-contacts --file paste.txt|people.csv [--account-domain d] [--commit]
     python3 gtm.py add-contact --company C --domain d --first F --last L --title T [--facts ..] [--commit]
     python3 gtm.py profile-facts --contact-id N --facts "from the full profile" [--commit]
     python3 gtm.py apply-research --file .tmp/research/x.jsonl [--commit]
     python3 gtm.py signals [--active] / close-signal --id N --commit
-    python3 gtm.py check-drafts --file .tmp/drafts/x.jsonl     # validate notes / DMs / emails
+    python3 gtm.py check-drafts --file .tmp/drafts/x.jsonl     # validate connect notes and DMs
     python3 gtm.py apply-drafts --file .tmp/drafts/x.jsonl [--commit]
     python3 gtm.py log-touch --contact-id N --channel linkedin --kind invite [--body ..] --commit
-    python3 gtm.py import-enrichment --file provider_export.csv [--commit]
-    python3 gtm.py export-emails --out .tmp/emails.csv
     python3 gtm.py suppress --kind email|phone|domain|linkedin --value V --reason R --commit
     python3 gtm.py pipeline [--html .tmp/pipeline.html]
     python3 gtm.py query "SELECT ..."            # read-only SQL
+    python3 gtm.py set-company --domain d [--name N] [--commit]   # your own company (Profile tab)
     python3 gtm.py ui [--port 8765] [--no-open]  # live read-only view in the browser
 """
 from __future__ import annotations
@@ -161,10 +159,8 @@ data/
 .env
 *.csv
 """
-ENV_EXAMPLE = """# Optional. Only scripts you add that call a provider need these.
-# PROSPEO_API_KEY=
-# HUNTER_API_KEY=
-# APOLLO_API_KEY=
+ENV_EXAMPLE = """# Optional: API keys for scripts you add yourself in execution/.
+# This file is git-ignored; never paste keys into chat.
 """
 
 
@@ -327,16 +323,6 @@ def pick(row: dict, *names: str) -> str:
     return ""
 
 
-def to_int(v: str) -> int | None:
-    m = re.search(r"\d[\d,'.]*", v or "")
-    if not m:
-        return None
-    try:
-        return int(re.sub(r"[,'.]", "", m.group(0)))
-    except ValueError:
-        return None
-
-
 def find_account(con, domain=None, linkedin=None, name=None):
     if domain:
         r = con.execute("SELECT * FROM accounts WHERE domain=?", (domain,)).fetchone()
@@ -368,31 +354,6 @@ def upsert_account(con, rec: dict, commit: bool) -> tuple[str, int | None]:
     rec.update(created_at=now(), updated_at=now())
     cur = con.execute(f"INSERT INTO accounts ({','.join(rec)}) VALUES ({','.join('?' * len(rec))})", tuple(rec.values()))
     return "new", cur.lastrowid
-
-
-def cmd_import_accounts(a) -> None:
-    con = connect()
-    rows = read_csv(Path(a.file)) if a.file else [{"domain": d} for d in a.domains]
-    n = 0
-    for r in rows:
-        dom = norm_domain(pick(r, "domain", "website", "company website", "url", "company domain"))
-        li = norm_li(pick(r, "linkedin", "linkedin url", "company linkedin", "linkedin company url"))
-        name = pick(r, "company", "company name", "companyname", "name", "account", "organization") or dom or ""
-        if not (dom or li or name):
-            continue
-        if suppressed(con, "domain", dom):
-            print(f"  SKIP suppressed  {dom}")
-            continue
-        rec = {"name": name, "domain": dom, "linkedin_url": li,
-               "country": pick(r, "country", "location", "hq", "headquarters"),
-               "size_employees": to_int(pick(r, "employees", "employee count", "employeecount", "headcount", "size")),
-               "industry": pick(r, "industry"), "segment": a.segment, "source": a.source}
-        action, _ = upsert_account(con, rec, a.commit)
-        print(f"  {action:<22} {name[:40]:<40} {dom or li or ''}")
-        n += action != "exists"
-    if a.commit:
-        con.commit()
-    done(a.commit, n, "account changes")
 
 
 PASTE_DEGREE = re.compile(r"^(1st|2nd|3rd)\b|(\d)(?:st|nd|rd|th) degree connection", re.I)
@@ -529,7 +490,8 @@ def cmd_add_contact(a) -> None:
         acc_id = acc_id or (acc["id"] if acc else None)
         cur = con.execute("INSERT INTO contacts (account_id, first_name, last_name, title, persona, linkedin_url, connection_degree, "
                           "profile_facts, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                          (acc_id, a.first, a.last, a.title, persona, norm_li(a.linkedin), a.degree, a.facts, a.source, now(), now()))
+                          (acc_id, a.first, a.last, a.title, persona, norm_li(a.linkedin), a.degree,
+                           f"[profile {now()[:10]}] {a.facts.strip()}" if a.facts else None, a.source, now(), now()))
         con.commit()
         print(f"  contact id: {cur.lastrowid}")
     elif a.commit:
@@ -664,13 +626,11 @@ def cmd_close_signal(a) -> None:
     done(a.commit, 1, "signal closed")
 
 
-# ----------------------------------------------------------------------------- drafts (LinkedIn notes, DMs, emails)
+# ----------------------------------------------------------------------------- drafts (LinkedIn connect notes and DMs)
 DEFAULT_RULES = {
     "linkedin-connect": {"max_chars": 200, "must_start": "Hi {first}, ",
                          "banned": ["offer", "demo", "call", "meeting", "price", "pricing", "free", "discount", "congrat"]},
     "linkedin-dm": {"max_chars": 600, "must_start": "", "banned": ["congrat", "guarantee", "act now"]},
-    "email": {"max_words": 110, "subject_max_words": 5, "must_start": "",
-              "banned": ["guarantee", "act now", "limited time", "100%", "congrat"]},
 }
 
 
@@ -678,7 +638,7 @@ def load_rules(kind: str) -> dict:
     """Defaults, overridden by a '## Rules (checked by gtm.py)' block in the channel's directive:
     lines like `max_chars: 200` or `banned: offer, demo, call`."""
     rules = json.loads(json.dumps(DEFAULT_RULES[kind]))
-    directive = WS / "directives" / ("cold_email.md" if kind == "email" else "linkedin.md")
+    directive = WS / "directives" / "linkedin.md"
     if not directive.exists():
         return rules
     text = directive.read_text(encoding="utf-8")
@@ -691,7 +651,7 @@ def load_rules(kind: str) -> dict:
         if not mm:
             continue
         k, val = mm.group(1), mm.group(2).strip().strip("`")
-        if k in ("max_chars", "max_words", "subject_max_words"):
+        if k in ("max_chars", "max_words"):
             rules[k] = int(re.sub(r"\D", "", val) or rules.get(k, 0))
         elif k == "banned":
             rules[k] = [w.strip().lower() for w in val.split(",") if w.strip()]
@@ -701,7 +661,7 @@ def load_rules(kind: str) -> dict:
 
 
 def check_draft(v: dict, contact) -> list[str]:
-    kind = v.get("kind") or ("email" if v.get("channel") == "email" else "linkedin-connect")
+    kind = v.get("kind") or "linkedin-connect"
     if kind not in DEFAULT_RULES:
         return [f"kind must be one of {', '.join(DEFAULT_RULES)}"]
     r = load_rules(kind)
@@ -716,14 +676,6 @@ def check_draft(v: dict, contact) -> list[str]:
         errs.append(f"{len(body)} characters (max {r['max_chars']})")
     if r.get("max_words") and len(body.split()) > r["max_words"]:
         errs.append(f"{len(body.split())} words (max {r['max_words']})")
-    if kind == "email":
-        subj = (v.get("subject") or "").strip()
-        if not subj:
-            errs.append("email needs a subject")
-        elif len(subj.split()) > r.get("subject_max_words", 5):
-            errs.append(f"subject longer than {r['subject_max_words']} words")
-        if re.search(r"https?://", body):
-            errs.append("no links in a first email (they hurt delivery and look like spam)")
     for w in r.get("banned", []):
         if re.search(rf"\b{re.escape(w)}", body, re.I):
             errs.append(f"banned word: {w!r}")
@@ -745,9 +697,6 @@ def load_drafts(con, path: Path):
         c = con.execute("SELECT * FROM contacts WHERE id=?", (v.get("contact_id"),)).fetchone()
         if not c:
             errs.append(f"line {i}: no contact with id {v.get('contact_id')}")
-            continue
-        if v.get("kind") == "email" and suppressed(con, "email", c["email"]):
-            errs.append(f"line {i}: {c['email']} is on the do-not-contact list")
             continue
         bad = check_draft(v, c)
         if bad:
@@ -776,7 +725,7 @@ def cmd_apply_drafts(a) -> None:
         sys.exit(1)
     for c, v in good:
         kind = v.get("kind") or "linkedin-connect"
-        channel = "email" if kind == "email" else "linkedin"
+        channel = "linkedin"
         print(f"  {kind:<17} {c['first_name']} {c['last_name']}")
         if a.commit:
             con.execute("UPDATE drafts SET status='dropped' WHERE contact_id=? AND kind=? AND status='draft'", (c["id"], kind))
@@ -805,60 +754,7 @@ def cmd_log_touch(a) -> None:
     done(a.commit, 1, "touch logged")
 
 
-# ----------------------------------------------------------------------------- enrichment (provider exports)
-def cmd_import_enrichment(a) -> None:
-    """Emails / phones from any provider's CSV export (Apollo, Prospeo, Hunter, Kaspr, Lusha...).
-    Matches by LinkedIn URL, then by first+last name+company. Fills empty fields only."""
-    con = connect()
-    n = 0
-    for r in read_csv(Path(a.file)):
-        li = norm_li(pick(r, "linkedin", "linkedin url", "person linkedin url", "profile url"))
-        first, last = pick(r, "first name", "firstname", "first"), pick(r, "last name", "lastname", "last")
-        company = pick(r, "company", "company name", "organization")
-        c = con.execute("SELECT * FROM contacts WHERE linkedin_url=?", (li,)).fetchone() if li else None
-        if not c and first and last:
-            c = con.execute("SELECT c.* FROM contacts c JOIN accounts a ON a.id=c.account_id WHERE lower(c.first_name)=lower(?) "
-                            "AND lower(c.last_name)=lower(?) AND (?='' OR lower(a.name) LIKE '%'||lower(?)||'%')",
-                            (first, last, company, company)).fetchone()
-        if not c:
-            continue
-        email = pick(r, "email", "work email", "email address")
-        status = pick(r, "email status", "email_status", "verification", "status")
-        phone = pick(r, "mobile", "mobile phone", "phone", "phone number", "direct phone")
-        ptype = "mobile" if pick(r, "mobile", "mobile phone") else ("direct" if phone else None)
-        fills = {}
-        if email and not c["email"] and not suppressed(con, "email", email):
-            fills.update(email=email, email_status=status or "unknown", email_source=a.provider)
-        if phone and not c["phone"] and not suppressed(con, "phone", phone):
-            fills.update(phone=phone, phone_type=ptype, phone_source=a.provider)
-        if fills:
-            n += 1
-            shown = ",".join(k for k in fills if not k.endswith(("_source", "_status", "_type")))
-            print(f"  fill {shown:<12} {c['first_name']} {c['last_name']}")
-            if a.commit:
-                con.execute(f"UPDATE contacts SET {', '.join(k + '=?' for k in fills)}, updated_at=? WHERE id=?",
-                            (*fills.values(), now(), c["id"]))
-    if a.commit:
-        con.commit()
-    done(a.commit, n, "contacts enriched")
-
-
-def cmd_export_emails(a) -> None:
-    con = connect()
-    rows = con.execute("""SELECT c.first_name, c.last_name, c.email, a.name AS company, a.domain, d.subject, d.body
-        FROM drafts d JOIN contacts c ON c.id=d.contact_id JOIN accounts a ON a.id=c.account_id
-        WHERE d.kind='email' AND d.status='draft' AND c.email IS NOT NULL""").fetchall()
-    rows = [r for r in rows if not suppressed(con, "email", r["email"]) and not suppressed(con, "domain", r["domain"])]
-    out = Path(a.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["email", "first_name", "last_name", "company", "subject", "body"])
-        for r in rows:
-            w.writerow([r["email"], r["first_name"], r["last_name"], r["company"], r["subject"], r["body"]])
-    print(f"{len(rows)} emails -> {out} (import this CSV into your sequencer; nothing was sent)")
-
-
+# ----------------------------------------------------------------------------- do-not-contact list
 def cmd_suppress(a) -> None:
     con = connect()
     val = norm_domain(a.value) if a.kind == "domain" else (norm_li(a.value) if a.kind == "linkedin" else a.value.strip())
@@ -906,7 +802,7 @@ SECTIONS = [
     ("drafts_ready", "Drafts ready to send"),
     ("new_signals", "New signals this week"),
     ("fit_no_people", "Fit accounts without people: find 1-2 contacts"),
-    ("invites_stale", "Invites open more than 7 days: withdraw or try another channel"),
+    ("invites_stale", "Invites open more than 7 days: nudge once, withdraw after 3 weeks"),
     ("old_signals", "Signals older than 30 days: re-check they are still live"),
 ]
 
@@ -964,8 +860,172 @@ def cmd_query(a) -> None:
         print(f"... {len(rows) - a.limit} more")
 
 
+# ----------------------------------------------------------------------------- your own company
+def cmd_set_company(a) -> None:
+    dom = norm_domain(a.domain)
+    if not dom:
+        sys.exit("give a domain, e.g. --domain example.com")
+    con = connect()
+    print(f"  own company: domain={dom}" + (f", name={a.name}" if a.name else ""))
+    if a.commit:
+        con.execute("INSERT OR REPLACE INTO meta VALUES ('own_domain', ?)", (dom,))
+        if a.name:
+            con.execute("INSERT OR REPLACE INTO meta VALUES ('own_name', ?)", (a.name.strip(),))
+        con.commit()
+    done(a.commit, 1, "company setting")
+
+
 # ----------------------------------------------------------------------------- ui (read-only local view)
 UI_PAGE = PLUGIN_ROOT / "ui" / "index.html"
+SITES = WS / ".tmp" / "sites"
+# The page may only talk to this server: no external scripts, images or requests.
+PAGE_CSP = ("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; "
+            "img-src 'self'; connect-src 'self'")
+STATUS_MARK = {"✅": "confirmed", "🟡": "check", "⬜": "missing"}
+
+
+def _heading(line: str) -> str:
+    """'## 1. What you sell' / '### 🙋 Who they are' -> 'What you sell' / 'Who they are'."""
+    h = re.sub(r"^#+\s*", "", line.strip())
+    return re.sub(r"^[^\w(]*(\d+\.\s*)?", "", h).strip()
+
+
+def doc_params(path: Path) -> list[dict]:
+    """Every row of a 'Parameter | Value' table, with its persona (if any), its group heading,
+    and its status mark (✅ 🟡 ⬜). The playbook is the source; nothing is stored twice."""
+    if not path.exists():
+        return []
+    out, header, persona, group = [], None, None, None
+    for line in path.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        m = re.match(r"^##\s+Persona:\s*(.+)$", t)
+        if m:
+            persona, group = _plain(m.group(1)), None
+        elif t.startswith("### "):
+            group = _heading(t)
+        elif t.startswith("## "):
+            persona, group = None, _heading(t)
+        if not t.startswith("|"):
+            header = None
+            continue
+        raw = [c.strip() for c in t.strip("|").split("|")]
+        cells = [_plain(c) for c in raw]
+        if header is None:
+            header = [c.lower() for c in cells]
+            continue
+        if set(t.replace("|", "").strip()) <= set("-: "):
+            continue
+        if header and header[0] == "parameter" and "value" in header:
+            row = dict(zip(header, cells))
+            conf_raw = dict(zip(header, raw)).get("confidence", "")
+            value = row.get("value", "")
+            status = next((v for k, v in STATUS_MARK.items() if k in conf_raw), "")
+            if not value or value.lower() in EMPTY:
+                status, value = "missing", ""
+            elif status in ("", "missing"):
+                status = "check"
+            out.append({"persona": persona, "group": group, "parameter": row.get("parameter", ""),
+                        "value": value, "source": row.get("source", ""), "status": status})
+    return out
+
+
+def doc_bullets(path: Path, heading_word: str) -> list[str]:
+    """The '- ...' lines under the heading that contains heading_word (placeholders skipped)."""
+    if not path.exists():
+        return []
+    out, inside = [], False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        if t.startswith("#"):
+            inside = heading_word.lower() in t.lower()
+            continue
+        if inside and t.startswith("- "):
+            item = t[2:].strip()
+            if item and not re.match(r"^_?\(e\.g\.", item):
+                out.append(_plain(item))
+    return out
+
+
+def about_me() -> dict:
+    """The owner's background from directives/linkedin.md (used in every connect note)."""
+    path = WS / "directives" / "linkedin.md"
+    if not path.exists():
+        return {"facts": [], "now": ""}
+    facts, header, now = [], None, ""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        t = line.strip()
+        m = re.match(r"^\*\*Who I am now\*\*[^:]*:\s*(.*)$", t)
+        if m:
+            v = _plain(m.group(1))
+            now = "" if v.lower().startswith("e.g.") else v
+        if not t.startswith("|"):
+            header = None
+            continue
+        cells = [_plain(c) for c in t.strip("|").split("|")]
+        if header is None:
+            header = [c.lower() for c in cells]
+            continue
+        if set(t.replace("|", "").strip()) <= set("-: "):
+            continue
+        if header and header[0].startswith("fact about me") and cells[0]:
+            facts.append({"fact": cells[0], "fits": cells[1] if len(cells) > 1 else ""})
+    return {"facts": facts, "now": now}
+
+
+def logo_file(domain: str | None) -> Path | None:
+    if not domain or not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", domain):
+        return None
+    return next(iter(sorted((SITES / domain).glob("logo.*"))), None) if (SITES / domain).is_dir() else None
+
+
+def nice_name(domain: str, facts: dict) -> str:
+    """A company name from what the site says about itself, else from the domain."""
+    org = facts.get("organization_schema") or {}
+    for v in (org.get("name"), facts.get("site_name")):
+        if isinstance(v, str) and 1 < len(v.strip()) <= 60:
+            return v.strip()
+    stem = re.sub(r"[^a-z0-9]", "", domain.split(".")[0])
+    parts = [x.strip() for x in re.split(r"\s[|\-–—·:]\s", facts.get("title") or "") if x.strip()]
+    for part in parts:
+        if re.sub(r"[^a-z0-9]", "", part.lower()) in (stem, stem.replace("the", "")) or \
+           (len(part) <= 40 and stem and stem in re.sub(r"[^a-z0-9]", "", part.lower())):
+            return part
+    return domain.split(".")[0].replace("-", " ").title()
+
+
+def own_company(con) -> dict | None:
+    meta = dict(con.execute("SELECT key, value FROM meta").fetchall())
+    dom = meta.get("own_domain")
+    if not dom:
+        try:
+            dom = norm_domain(json.loads((WS / ".tmp" / "guide.json").read_text()).get("domain"))
+        except (OSError, ValueError, AttributeError):
+            dom = None
+    if not dom:
+        return None
+    facts = {}
+    try:
+        facts = json.loads((SITES / dom / "facts.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    return {
+        "domain": dom, "name": meta.get("own_name") or nice_name(dom, facts),
+        "headline": facts.get("headline", ""), "description": facts.get("description", ""),
+        "linkedin": facts.get("company_linkedin"), "languages": facts.get("languages", []),
+        "pages_read": facts.get("pages_read"), "read_at": facts.get("read_at"),
+        "readable": facts.get("readable"), "logo": bool(logo_file(dom)),
+    }
+
+
+def profile_data(con) -> dict:
+    d = WS / "directives"
+    return {
+        "company": own_company(con),
+        "icp": doc_params(d / "icp.md"),
+        "fit_rule": doc_bullets(d / "icp.md", "fit rule"),
+        "personas": doc_params(d / "personas.md"),
+        "me": about_me(),
+    }
 
 
 def ui_data() -> dict:
@@ -987,6 +1047,8 @@ def ui_data() -> dict:
                            "WHERE status='draft' ORDER BY id"),
             "touches": rows("SELECT id, contact_id, channel, kind, outcome, at FROM touches ORDER BY at, id"),
             "pipeline": [{"key": k, "title": t, "rows": [row_text(k, r) for r in pipe[k]]} for k, t in SECTIONS],
+            "profile": profile_data(con),
+            "logos": sorted(p.parent.name for p in SITES.glob("*/logo.*")) if SITES.is_dir() else [],
         }
     finally:
         con.close()
@@ -1003,11 +1065,12 @@ def cmd_ui(a) -> None:
     page = UI_PAGE.read_bytes()
 
     class Handler(http.server.BaseHTTPRequestHandler):
-        def _send(self, code: int, body: bytes, ctype: str) -> None:
+        def _send(self, code: int, body: bytes, ctype: str, csp: str = PAGE_CSP) -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", csp)
             self.end_headers()
             self.wfile.write(body)
 
@@ -1025,6 +1088,13 @@ def cmd_ui(a) -> None:
                 except sqlite3.Error as e:
                     return self._send(500, json.dumps({"error": str(e)}).encode(), "application/json")
                 return self._send(200, body, "application/json")
+            if path.startswith("/logo/"):
+                f = logo_file(path[len("/logo/"):].lower())
+                if f:
+                    ctype = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "gif": "image/gif",
+                             "webp": "image/webp", "ico": "image/x-icon"}.get(f.suffix[1:], "application/octet-stream")
+                    # a logo is a file from someone else's website: no scripts, ever
+                    return self._send(200, f.read_bytes(), ctype, "default-src 'none'; style-src 'unsafe-inline'; sandbox")
             self._send(404, b"not found", "text/plain")
 
         def log_message(self, *args) -> None:  # keep the terminal quiet
@@ -1058,9 +1128,6 @@ def main() -> None:
     sub.add_parser("init").set_defaults(fn=cmd_init)
     sub.add_parser("status").set_defaults(fn=cmd_status)
     p = sub.add_parser("profile-check"); p.add_argument("kind", choices=["icp", "persona"]); p.set_defaults(fn=cmd_profile_check)
-    p = sub.add_parser("import-accounts"); p.add_argument("--file"); p.add_argument("--domains", nargs="*", default=[])
-    p.add_argument("--source", default="import"); p.add_argument("--segment"); p.add_argument("--commit", action="store_true")
-    p.set_defaults(fn=cmd_import_accounts)
     p = sub.add_parser("import-contacts"); p.add_argument("--file", required=True); p.add_argument("--account-domain")
     p.add_argument("--source"); p.add_argument("--skip", nargs="*", default=[]); p.add_argument("--commit", action="store_true")
     p.set_defaults(fn=cmd_import_contacts)
@@ -1084,14 +1151,13 @@ def main() -> None:
     p = sub.add_parser("log-touch"); p.add_argument("--contact-id", type=int, required=True); p.add_argument("--channel", required=True)
     p.add_argument("--kind", required=True); p.add_argument("--body"); p.add_argument("--outcome"); p.add_argument("--at")
     p.add_argument("--commit", action="store_true"); p.set_defaults(fn=cmd_log_touch)
-    p = sub.add_parser("import-enrichment"); p.add_argument("--file", required=True); p.add_argument("--provider", default="provider export")
-    p.add_argument("--commit", action="store_true"); p.set_defaults(fn=cmd_import_enrichment)
-    p = sub.add_parser("export-emails"); p.add_argument("--out", default=".tmp/emails_for_sequencer.csv"); p.set_defaults(fn=cmd_export_emails)
     p = sub.add_parser("suppress"); p.add_argument("--kind", required=True, choices=["email", "phone", "domain", "linkedin"])
     p.add_argument("--value", required=True); p.add_argument("--reason", required=True); p.add_argument("--commit", action="store_true")
     p.set_defaults(fn=cmd_suppress)
     p = sub.add_parser("pipeline"); p.add_argument("--html"); p.set_defaults(fn=cmd_pipeline)
     p = sub.add_parser("query"); p.add_argument("sql"); p.add_argument("--limit", type=int, default=50); p.set_defaults(fn=cmd_query)
+    p = sub.add_parser("set-company"); p.add_argument("--domain", required=True); p.add_argument("--name")
+    p.add_argument("--commit", action="store_true"); p.set_defaults(fn=cmd_set_company)
     p = sub.add_parser("ui"); p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-open", action="store_true", help="do not open the browser"); p.set_defaults(fn=cmd_ui)
     a = ap.parse_args()

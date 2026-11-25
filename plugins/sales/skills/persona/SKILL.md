@@ -13,7 +13,7 @@ allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py *) Read Edit
    persona (the founder or owner) is often enough.
 3. Fill the 8 parameters for each with value, source and confidence (`✅ found`,
    `🟡 inferred`, `⬜ missing`), like the ICP. Keep each cell short and on one line.
-   **titles** must be a comma-separated list of lowercase title words: `import-leads`
+   **titles** must be a comma-separated list of lowercase title words: the people import
    uses it to tag people (e.g. `founder, ceo, owner, managing director`).
 4. Ask **exactly 5 numbered questions** in one message (plain list, no menus), missing
    items first, each with your guess. Typical: who signs, what they complain about in
@@ -26,4 +26,4 @@ allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py *) Read Edit
    if empty: ask the user for 2-3 true facts about their own career, and the one-line
    "who I am now". The LinkedIn notes are built from these.
 7. Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py profile-check persona`. Next: a signal
-   skill (`hiring-signal`) or `import-leads`.
+   skill (`hiring-signal` or `signal-builder`).

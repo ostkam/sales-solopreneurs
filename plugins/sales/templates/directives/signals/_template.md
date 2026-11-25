@@ -52,7 +52,7 @@ The research subagent answers these from evidence, with a link:
 
 > "<e.g. I saw you are hiring a second bookkeeper.>"
 
-Then the message playbooks (`linkedin.md`, `cold_email.md`) take over.
+Then the LinkedIn playbook (`linkedin.md`) takes over.
 
 ---
 

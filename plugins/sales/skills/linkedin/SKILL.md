@@ -1,6 +1,6 @@
 ---
 name: linkedin
-description: LinkedIn outreach in two steps - a personal connect note (no pitch) and, after they accept, a follow-up DM built on the signal. Writes each message from the person's profile and the user's real background, validates it (length, banned words, true basis), stores drafts, and logs invites, accepts and replies.
+description: LinkedIn outreach for a fit account - import the people from a pasted Sales Navigator or LinkedIn list (or one profile), pick the 1-2 right ones by persona, then a personal connect note (no pitch) and, after they accept, a follow-up DM built on the signal. Writes each message from the person's full profile and the user's real background, validates it (length, banned words, true basis), stores drafts, and logs invites, accepts and replies.
 allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py *) Read Write Edit
 ---
 
@@ -9,6 +9,17 @@ allowed-tools: Bash(python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py *) Read Write E
 Read `directives/linkedin.md` first, every time. It holds the shapes, the rules and the
 user's background. If "My background for common ground" is empty, ask the user for 2-3
 true career facts and their one-line "who I am now", and write them there.
+
+## 0. Find the people (for a fit account)
+1. Ask the user to open the company's people page in Sales Navigator (or a LinkedIn people
+   search), select all text, and paste it here. Save it as `input/paste_<company>.txt`.
+2. Import as a dry run:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py import-contacts --file input/paste_<company>.txt --account-domain <domain>`
+   Each person is tagged with a persona from the **titles** row in `directives/personas.md`.
+3. Pick the **1-2 best people** (persona match first, then 2nd-degree connections), one
+   reason each, and commit only those (`--skip` the others, then `--commit`).
+4. One person instead of a list? Save them directly:
+   `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py add-contact --company "<company>" --domain <domain> --first <first> --last <last> --title "<title>" --commit`
 
 ## 1. Connect note
 For each chosen person (`gtm.py query "select c.id, c.first_name, c.last_name, c.title, c.profile_facts, a.name from contacts c join accounts a on a.id=c.account_id where ..."`):

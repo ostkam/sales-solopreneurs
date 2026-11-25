@@ -1,6 +1,6 @@
 {
   "name": "sales-solopreneurs",
-  "description": "An AI-native B2B sales workspace for solopreneurs, in Claude Code: ICP, personas, signals, LinkedIn and email outreach, on a local database.",
+  "description": "An AI-native B2B sales workspace for solopreneurs, in Claude Code: ICP, personas, buying signals and LinkedIn outreach, on a local database with a live CRM view.",
   "owner": {
     "name": "Kamil Ostrowski"
   },
@@ -8,7 +8,7 @@
     {
       "name": "sales",
       "source": "./plugins/sales",
-      "description": "Build and run a local AI-native B2B sales system: guided start, website reading, ICP and personas, your own buying signals (hiring as the example), lead import, LinkedIn and cold email with validators, daily pipeline, learning loop."
+      "description": "Build and run a local AI-native B2B sales system: guided start, website reading, ICP and personas, your own buying signals (hiring as the example), LinkedIn connect notes and follow-ups with a validator, and a live local CRM view."
     }
   ]
 }

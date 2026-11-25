@@ -32,6 +32,10 @@ Then: "Next: I read your website to learn your business. Go?"
 
 ## Step 2: read the website
 Run `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/site_read.py <domain>` (progress shows per page).
+Then save it as the user's own company:
+`python3 ${CLAUDE_PLUGIN_ROOT}/scripts/gtm.py set-company --domain <domain> --commit` (add
+`--name "..."` only if the name the site gives is wrong). Say: "Your company name and logo
+are now in the **Profile** tab."
 Then, as in the `read-website` skill, show a short table of what you learned, each row
 with its page: what they sell, to whom, industries, proof (customers, results), regions
 and languages, company LinkedIn. Say what was not found.
@@ -44,7 +48,9 @@ Follow the `icp` skill: fill the 11 parameters from `.tmp/sites/<domain>/pages.j
 one-sentence answer, with sources. Show what you already found ("found on your site: n of
 11"). Ask **exactly 5 numbered questions** in one message, each with your guess, and end
 with: "Answer like `1 ... 2 ...`; one line each; 'skip' is fine."
-Write `directives/icp.md`, run `gtm.py profile-check icp`, show the result in two lines.
+Write `directives/icp.md`, run `gtm.py profile-check icp`, show the result in two lines,
+and point to the **Profile** tab: every parameter is there with a dot (green confirmed,
+yellow please check, grey missing).
 Then: "Next: who inside those companies we talk to. Go?"
 
 ## Step 4: personas
@@ -53,6 +59,7 @@ The 3rd question is always about the user: "Two true facts about your own backgr
 one line for who you are now (e.g. 'now a founder helping small agencies with AI')". These
 go into the background table in `directives/linkedin.md`; every LinkedIn note uses them.
 Write `directives/personas.md`. Show the titles list: "These are the titles we will search for."
+(They show as chips on each persona card in the **Profile** tab.)
 Then: "Next: the signal that tells you a company needs you right now. Go?"
 
 ## Step 5: your first buying signal
@@ -97,9 +104,9 @@ Say: "Nothing is sent. You copy it into LinkedIn yourself; tell me when it is se
 Run `gtm.py status` and `gtm.py pipeline`, and point to the **Today** tab of the live view.
 Show in 5 lines what now exists: playbooks (ICP, personas, signal spec, LinkedIn), n accounts, n signals, 1 note
 ready. Then list what the user can ask for next, in plain words: "build another signal",
-"find more companies hiring ...", "import people from a Sales Navigator page", "write cold
-emails for the fits", "what should I do today?", "learn from my results". Mark the flow
-done in `.tmp/guide.json`.
+"find more companies hiring ...", "find the people at <company>", "write the follow-up DM
+for <name>, she accepted", "what should I do today?", "start the CRM". Mark the flow done
+in `.tmp/guide.json`.
 
 ## Rules for the guide
 - One step at a time. Never run two steps without a "go" (Enter, "go", "yes", "next" all

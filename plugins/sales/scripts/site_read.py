@@ -13,6 +13,7 @@ industries, team, contact, pricing, careers), 4 at a time, and writes:
   .tmp/sites/<domain>/facts.json   facts found by rule: title, headline, description,
                                    languages, company LinkedIn and social links, emails,
                                    phones, schema.org organisation data, page kinds found
+  .tmp/sites/<domain>/logo.<ext>   the company's own logo or icon, if the site has one
 
 Claude reads both and does the judgment (what they sell, who buys, fit).
 Pages built only by JavaScript look empty to this script; the facts say so.
@@ -54,7 +55,8 @@ SOCIAL = re.compile(r"https?://(?:[a-z]{2,3}\.)?(linkedin\.com/company/[^/?#\"']
 class Page(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
-        self.title, self.desc, self.lang = "", "", ""
+        self.title, self.desc, self.lang, self.site_name = "", "", "", ""
+        self.icons = []  # <link rel="icon" / "apple-touch-icon" ...>
         self.h1, self.links, self.ldjson, self.text = [], [], [], []
         self._skip, self._in, self._a = 0, None, None
 
@@ -75,10 +77,16 @@ class Page(HTMLParser):
             n = (at.get("name") or at.get("property") or "").lower()
             if n in ("description", "og:description") and not self.desc:
                 self.desc = at.get("content", "") or ""
+            elif n == "og:site_name" and not self.site_name:
+                self.site_name = (at.get("content") or "").strip()
         elif tag == "a" and at.get("href"):
             self._a = {"href": at["href"], "text": ""}
-        elif tag == "link" and (at.get("rel") or "") and "alternate" in str(at.get("rel")) and at.get("hreflang"):
-            self.links.append({"href": at.get("href", ""), "text": "", "hreflang": at["hreflang"]})
+        elif tag == "link":
+            rel = str(at.get("rel") or "").lower()
+            if "alternate" in rel and at.get("hreflang"):
+                self.links.append({"href": at.get("href", ""), "text": "", "hreflang": at["hreflang"]})
+            elif "icon" in rel and "mask-icon" not in rel and at.get("href"):
+                self.icons.append({"rel": rel, "href": at["href"], "sizes": at.get("sizes") or ""})
         elif tag in ("br", "p", "li", "div", "section", "h2", "h3", "tr"):
             self.text.append("\n")
 
@@ -169,11 +177,68 @@ def org_data(pages) -> dict:
                 types = t if isinstance(t, list) else [t]
                 if any(str(tt) in ("Organization", "Corporation", "LocalBusiness", "Company", "ProfessionalService")
                        for tt in types):
-                    for k in ("name", "legalName", "description", "url", "telephone", "email", "foundingDate",
+                    for k in ("name", "legalName", "description", "url", "logo", "telephone", "email", "foundingDate",
                               "numberOfEmployees", "address", "sameAs", "areaServed"):
                         if x.get(k) and k not in out:
                             out[k] = x[k]
     return out
+
+
+IMAGE_MAGIC = [(b"\x89PNG", "png"), (b"\xff\xd8", "jpg"), (b"GIF8", "gif"), (b"\x00\x00\x01\x00", "ico")]
+
+
+def image_ext(data: bytes) -> str | None:
+    """File type from the first bytes, so a 404 page saved as 'logo.png' is never kept."""
+    for magic, ext in IMAGE_MAGIC:
+        if data.startswith(magic):
+            return ext
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    if b"<svg" in data[:2000].lower():
+        return "svg"
+    return None
+
+
+def fetch_bytes(url: str, timeout: float = 8.0) -> bytes | None:
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "image/*,*/*;q=0.5"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ssl.create_default_context()) as r:
+            return r.read(1_000_001)
+    except Exception:  # noqa: BLE001 - a missing logo is not an error
+        return None
+
+
+def icon_size(icon: dict) -> int:
+    m = re.search(r"(\d+)x\d+", icon.get("sizes") or "")
+    if m:
+        return int(m.group(1))
+    return 180 if "apple-touch-icon" in icon["rel"] else (512 if icon["href"].lower().endswith(".svg") else 32)
+
+
+def save_logo(base: str, hp: Page, org: dict, out: Path) -> dict:
+    """Save the company's own logo next to the facts: the biggest square icon first (it looks
+    best small), then the schema.org logo, then /favicon.ico. Only real images are kept."""
+    cands = [urljoin(base, i["href"]) for i in sorted(hp.icons, key=icon_size, reverse=True) if icon_size(i) >= 64]
+    logo = org.get("logo")
+    if isinstance(logo, dict):
+        logo = logo.get("url") or logo.get("contentUrl")
+    if isinstance(logo, str) and logo:
+        cands.append(urljoin(base, logo))
+    cands += [urljoin(base, i["href"]) for i in hp.icons]
+    cands += [urljoin(base, "/apple-touch-icon.png"), urljoin(base, "/favicon.ico")]
+    for old in out.glob("logo.*"):
+        old.unlink()
+    seen = set()
+    for url in cands:
+        if url in seen or not url.startswith(("http://", "https://")):
+            continue
+        seen.add(url)
+        data = fetch_bytes(url)
+        ext = image_ext(data) if data and 100 < len(data) <= 1_000_000 else None
+        if ext:
+            (out / f"logo.{ext}").write_bytes(data)
+            return {"logo_file": f"logo.{ext}", "logo_source": url}
+    return {"logo_file": None, "logo_source": None}
 
 
 def main() -> None:
@@ -243,11 +308,13 @@ def main() -> None:
     facts = {
         "domain": dom, "readable": True, "read_at": time.strftime("%Y-%m-%d %H:%M"),
         "seconds": round(time.time() - start), "pages_read": len(pages),
-        "title": (hp.title or "").strip(), "headline": next((h.strip() for h in hp.h1 if h.strip()), ""),
+        "title": (hp.title or "").strip(), "site_name": hp.site_name,
+        "headline": next((h.strip() for h in hp.h1 if h.strip()), ""),
         "description": hp.desc, "languages": langs,
         "company_linkedin": next((s for s in social if "/company/" in s), None),
         "social": social, "emails": emails, "phones": phones,
-        "organization_schema": org_data(pages),
+        "organization_schema": (org := org_data(pages)),
+        **save_logo(base, hp, org, out),
         "page_kinds_found": sorted({p["kind"] for p in pages}),
         "thin_pages": thin,
         "note": ("Some pages show almost no text without JavaScript; read them in a browser if they matter."
@@ -263,6 +330,7 @@ def main() -> None:
     print(f"  headline:  {facts['headline'][:90]}")
     print(f"  languages: {', '.join(langs) or '-'}")
     print(f"  LinkedIn:  {facts['company_linkedin'] or '-'}")
+    print(f"  logo:      {facts['logo_file'] or '-'}")
     if facts["organization_schema"]:
         print(f"  schema:    {', '.join(facts['organization_schema'])}")
     if thin:

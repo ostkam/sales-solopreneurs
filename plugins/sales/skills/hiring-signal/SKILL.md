@@ -46,4 +46,4 @@ Read the dry run. If the file is REFUSED, fix the named lines and run again. The
 ## E. Learn
 Add one row to the **Learnings** table in `directives/signals/hiring.md`: date, ads pasted, employers
 kept, fits, and any new recruiter names (add those to the skip list too).
-Next for the fits: `import-leads` (find 1-2 people per account).
+Next for the fits: the `linkedin` skill (find 1-2 people per account, then the connect note).
